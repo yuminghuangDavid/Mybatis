@@ -1,0 +1,580 @@
+# mybatis
+
+  ***MyBatis*** ：是一款优秀的持久层框架，它支持自定义 SQL、存储过程以及高级映射。MyBatis 免除了几乎所有的 JDBC 代码以及设置参数和获取结果集的工作。MyBatis 可以通过简单的 XML 或注解来配置和映射原始类型、接口和 Java POJO（Plain Old Java Objects，普通老式 Java 对象）为数据库中的记录。
+
+**Tips：**
+**DAO层：**
+DAO层叫数据访问层，全称为data access object，属于一种比较底层，比较基础的操作，具体到对于某个表的增删改查，也就是说某个DAO一定是和数据库的某一张表一一对应的，其中封装了增删改查基本操作，建议DAO只做原子操作，增删改查。
+
+**Service层：**
+Service层叫服务层，被称为服务，粗略的理解就是对一个或多个DAO进行的再次封装，封装成一个服务，所以这里也就不会是一个原子操作了，需要事物控制。
+
+**Controler层：**
+Controler负责请求转发，接受页面过来的参数，传给Service处理，接到返回值，再传给页面。
+
+**总结：**
+个人理解DAO面向表，Service面向业务。后端开发时先数据库设计出所有表，然后对每一张表设计出DAO层，然后根据具体的业务逻辑进一步封装DAO层成一个Service层，对外提供成一个服务。
+
+## 第一个mybatis程序
+
+### **第一步：搭建环境 例子：**
+
+~~~mysql
+create database mybatis;
+
+use mybatis;
+
+create table user(
+   id int not null auto_increment primary key,
+   name varchar(30) default null,
+   pwd varchar(30) default null
+)engine=innodb default charset=utf8;
+
+insert into user (id,name,pwd) values (1,'hym','123'),(2,'ljf','121'),(3,'zzy','113')
+~~~
+
+### **第二步：新建一个Maven项目**
+
+- 删除src文件
+- 导入Maven依赖
+
+```xml
+   <?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.example</groupId>
+    <artifactId>com.hym</artifactId>
+    <packaging>pom</packaging>
+    <version>1.0-SNAPSHOT</version>
+    <modules>
+        <module>mybatis-01</module>
+    </modules>
+
+    <dependencies>
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>5.1.47</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mybatis</groupId>
+            <artifactId>mybatis</artifactId>
+            <version>3.5.2</version>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.12</version>
+        </dependency>
+    </dependencies>
+    <build>
+    <resources>
+        <resource>
+            <directory>src/main/java</directory>
+            <includes>
+                <include>**/*.properties</include>
+                <include>**/*.xml</include>
+            </includes>
+            <filtering>false</filtering>
+        </resource>
+        <resource>
+            <directory>src/main/resources</directory>
+            <includes>
+                <include>**/*.properties</include>
+                <include>**/*.xml</include>
+            </includes>
+            <filtering>false</filtering>
+        </resource>
+    </resources>
+    </build>
+</project>
+```
+
+### 第三步：创建一个模块
+
+- 编写mybatis核心配置文件 在src/main/resource里面创建一个mybatis-config.xml
+
+  ```xml
+  <?xml version="1.0" encoding="UTF-8" ?>
+  <!DOCTYPE configuration
+          PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+          "http://mybatis.org/dtd/mybatis-3-config.dtd">
+  <configuration>
+      <environments default="development">
+          <environment id="development">
+              <transactionManager type="JDBC"/>
+              <dataSource type="POOLED">
+                  <property name="driver" value="com.mysql.jdbc.Driver"/>
+                  <property name="url" value="jdbc:mysql://localhost:3306/mybatis?useSSL=false&amp;useUnicode=true&amp;characterEncoding=utf8"/>
+                  <property name="username" value="root"/>
+                  <property name="password" value="hym20160426"/>
+              </dataSource>
+          </environment>
+      </environments>
+      <mappers>
+          <mapper resource="com/hym/dao/UserMapper.xml"/>
+      </mappers>
+  </configuration>
+  ```
+
+- 编写mybatis工具类 路径在src/main/java/com/hym/utils/mybatisUtils.java
+
+```java
+package com.hym.utils;
+
+import org.apache.ibatis.io.Resources;
+import org.apache.ibatis.session.SqlSession;
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.apache.ibatis.session.SqlSessionFactoryBuilder;
+
+import java.io.IOException;
+import java.io.InputStream;
+
+//SqlSessionFactory
+public class mybatisUtils {
+
+    private static SqlSessionFactory sqlSessionFactory;
+    static {
+        try {
+            //使用mybatis的第一步 获取SqlSessionFactory对象
+            String resource = "mybatis-config.xml";  //资源在mybatis-config.xml，就是mybatis的核心配置文件
+            InputStream inputStream = Resources.getResourceAsStream(resource);
+            SqlSessionFactory sqlSessionFactory = new SqlSessionFactoryBuilder().build(inputStream);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+        //获取SqlSession连接
+        public static SqlSession getSqlSession(){
+            return sqlSessionFactory.openSession();
+        }
+    }
+```
+
+**Tips：**
+
+java中静态代码块详解
+先说说代码中为什么要使用这种写法吧，
+还记得静态代码块的特点吗？随着类的加载而执行，而且只执行一次
+静态代码块：执行优先级高于非静态的初始化块，它会在类初始化的时候执行一次，执行完成便销毁，它仅能初始化类变量，即static修饰的数据成员。
+静态代码块写法
+static{
+
+}
+
+本身父类执行main方法就会执行一次静态代码块，但是在父类中main方法new了一次子类，按继承关系，父类中的静态代码块应该还会执行，但是控制台中却没有打印，这就是因为静态代码块的特征的原因所致，**随着类的加载而执行，而且只执行一次**，
+
+下面的例子最为直观：
+
+![img](https://img-blog.csdnimg.cn/20190417180450630.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FxXzM1ODY4NDEy,size_16,color_FFFFFF,t_70)
+
+
+
+### 第四步：编写代码
+
+**创建的文件均是位置的最后一个文件**
+
+#### 实体类 
+
+- 位置是src/main/java/com/hym/pojo/User.java
+
+~~~java
+package com.hym.pojo;
+
+public class User {
+    private int id;
+    private String name;
+    private String pwd;
+
+    public User() {}
+    public User(int id,String name,String pwd)
+    {
+        this.id = id;
+        this.name = name;
+        this.pwd = pwd;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getPwd() {
+        return pwd;
+    }
+
+    public void setPwd(String pwd) {
+        this.pwd = pwd;
+    }
+
+    @Override
+    public String toString() {
+        return "User{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", pwd='" + pwd + '\'' +
+                '}';
+    }
+}
+
+~~~
+
+#### Mapper接口(Dao接口) 
+
+- 位置是src/main/java/com/hym/dao/UserMapper.java
+
+  ~~~java
+  package com.hym.dao;
+  
+  import com.hym.pojo.User;
+  import java.util.List;
+  
+  public interface UserMapper {
+      //查询全部用户
+    List<User> getUserList();
+  }
+  ~~~
+
+~~~
+  
+
+  
+#### 接口实现类(配置文件)
+  
+  - 位置是src/main/java/com/hym/dao/UserMapper.xml
+  
+  - namespace 十分重要，不能写错！
+
+​~~~xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--namespace=绑定一个对应的Mapper/Dao接口-->
+<mapper namespace="com.hym.dao.UserDao">  <!-- //该文件的命名空间与Mapper接口类绑定起来了-->
+    <!--select查询语句，resultType返回的是一个数据的类型，resultMap是返回一个集合-->
+    <select id="getUserList" resultType="com.hym.pojo.User">
+        select * from mybatis.user
+    </select>
+</mapper>
+~~~
+
+### 第五步：测试
+
+- junit测试 （测试的包尽量和开发的包一一对应，就是路径啥的除了main不一样其他都一样）
+
+~~~java
+package com.hym.dao;
+
+import com.hym.pojo.User;
+import com.hym.utils.MybatisUtils;
+import org.apache.ibatis.session.SqlSession;
+import org.junit.Test;
+
+import java.util.List;
+
+public class UserMapperTest {
+   @Test
+    public void test()
+   {
+       SqlSession sqlSession = MybatisUtils.getSqlSession(); //这句话是固定的
+       UserDao userDao = sqlSession.getMapper(UserDao.class);
+       List<User> userList = userDao.getUserList();
+
+       for (User user : userList) { //写了userList.for之后按回车就能自动出来这段代码
+           System.out.println(user);
+       }
+        //关闭
+       sqlSession.close(); //这句话也是固定的，一定要关闭
+   }
+}
+~~~
+
+**持久层映射文件的Tips：**
+
+utils文件夹：存放全局的一些.js文件,公共用到的一些事件处理代码文件可以放到该文件夹下,用于全局调用。
+
+mapper文件夹：mapper映射文件是sql映射文件，是[mybatis](https://so.csdn.net/so/search?q=mybatis&spm=1001.2101.3001.7020)框架中十分重要的文件，可以说，mybatis框架的强大之处就体现在映射文件的编写上。mapper.xml映射文件主要是用来编写sql语句的，以及一些结果集的映射关系的编写，还有就是缓存的一些配置等等。
+
+pojo文件夹：只是为了封装数据”,当sql语句查询到数据之后,如果你要封装到对应的POJO中,一定要保证字段和POJO中的变量名一样,如果不一样,无法封装,这个时候只能使用起别名或修改变量名的方式解决问题.
+
+具体参考：https://www.csdn.net/tags/MtTaMg4sMDQ0MzQwLWJsb2cO0O0O.html
+
+
+
+**上述操作实现之后，正常来说按照需求只需要更改UserMapper.java、UserMapper.xml、UserMapperTest.java就可以了**
+
+
+
+## 增删改查(CRUD)
+
+- **namespace**
+
+​       namespace中的包名要和接口的包名一致
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hym.mapper.UserMapper">
+    <select id="getUserList" resultType="com.hym.pojo.User">
+        select * from mybatis.user
+    </select>
+```
+
+### 具体操作
+
+**第一步：**编写接口（UserMapper.java）
+
+**第二步**：编写对应mapper中的sql语句（UserMapper.xml）
+
+**第三步**：测试（UserMapperTest.java）//增删改需要提交事务，也就是要commit()
+
+- **select**
+
+- **insert**
+- **update**
+- **delete**
+
+#### UserMapper.java代码
+
+~~~java
+package com.hym.mapper;
+
+import com.hym.pojo.User;
+import java.util.List;
+
+public interface UserMapper {
+    //查询所有用户
+    List<User> getUserList();
+
+    //根据id查询用户
+    User getUserById(int id);
+
+    //insert一个用户 插入用户
+    int addUser(User user);
+
+    //修改用户
+    int updateUser(User user);
+
+    //删除一个用户
+    int deleteUser(int id);
+}
+~~~
+
+#### UserMapper.xml代码
+
+- id：就是对应namespace中的方法名
+- resultType：Sql语句执行的返回值
+- parameterType：参数类型
+
+~~~xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hym.mapper.UserMapper">
+    <select id="getUserList" resultType="com.hym.pojo.User">
+        select * from mybatis.user
+    </select>
+
+    <!--resultType="com.hym.pojo.User"这个语句意思是返回类型为User类型，mybatis.user是自己建的user表，
+     id = #{id}意思是通过id来查询，取决于parameterType="int"这个参数类型，#{id}的意思是传入的值
+-->
+    <select id="getUserById" parameterType="int" resultType="com.hym.pojo.User"> 
+        select * from mybatis.user where id = #{id}
+    </select>
+    
+    <insert id="addUser" parameterType="com.hym.pojo.User" >
+        insert into mybatis.user (id,name,pwd) values(#{id},#{name},#{pwd});
+    </insert>
+
+    <update id="updateUser" parameterType="com.hym.pojo.User">
+        update mybatis.user set name=#{name},pwd=#{pwd} where id = #{id};
+    </update>
+
+    <delete id="deleteUser" parameterType="int">
+        delete from mybatis.user where id=#{id};
+    </delete>
+</mapper>
+~~~
+
+
+
+#### UserMapperTest.java代码
+
+~~~java
+package com.hym.mapper;
+
+import com.hym.pojo.User;
+import com.hym.utils.MybatisUtils;
+import org.apache.ibatis.session.SqlSession;
+import org.junit.Test;
+
+import java.util.List;
+
+public class UserMapperTest {
+
+    @Test
+    public void test()
+   {
+       SqlSession sqlSession = MybatisUtils.getSqlSession();
+       UserMapper userDao = sqlSession.getMapper(UserMapper.class);
+       List<User> userList = userDao.getUserList();
+
+       for (User user : userList) {
+           System.out.println(user);
+       }
+       sqlSession.close();
+   }
+   @Test
+   public void getUserById()
+   {
+       SqlSession sqlSession = MybatisUtils.getSqlSession();
+
+       UserMapper mapper = sqlSession.getMapper(UserMapper.class); //获得接口的class对象
+
+       User user = mapper.getUserById(1); //返回一个一号用户
+       System.out.println(user);
+
+       sqlSession.close();
+   }
+
+    //增删改需要提交事务
+   @Test
+   public void addUser()
+   {
+       SqlSession sqlSession = MybatisUtils.getSqlSession();
+
+       UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+
+       mapper.addUser(new User(6,"xzh","171"));
+
+       //提交事务，不然就算插入了之后，数据库也不会增加数据,增删改需要提交事务
+       sqlSession.commit();
+
+       sqlSession.close();
+   }
+
+   @Test
+   public void updateUser()
+   {
+       SqlSession sqlSession = MybatisUtils.getSqlSession();
+
+       UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+
+       mapper.updateUser(new User(5,"hhx","1231213"));
+
+       sqlSession.commit();
+
+       sqlSession.close();
+   }
+
+   @Test
+   public void deleteUser()
+   {
+       SqlSession sqlSession = MybatisUtils.getSqlSession();
+
+       UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+
+       mapper.deleteUser(6);
+
+       sqlSession.commit();
+
+       sqlSession.close();
+   }
+}
+~~~
+
+
+
+## 万能的map
+
+假设实体类，或者说数据库中的表，字段或者参数过多，我们应该考虑使用Map
+
+~~~java
+    //万能的map
+    int addUser2(Map<String,Object> map);
+~~~
+
+~~~xml
+    <insert id="addUser2" parameterType="Map" >
+        insert into mybatis.user (id,pwd) values(#{userid},#{password});
+    </insert>
+~~~
+
+~~~java
+@Test
+   public void addUser2()
+   {
+     SqlSession sqlSession  = MybatisUtils.getSqlSession();
+
+     UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+
+     HashMap<String,Object> map = new HashMap<String, Object>();
+
+     map.put("userid",6);
+     map.put("password","232323");
+
+     mapper.addUser2(map);
+
+     sqlSession.commit();
+
+     sqlSession.close();
+   }
+~~~
+
+
+
+Map传递参数，直接在Sql中取出key即可 【parameterType="Map"】
+
+对象传递参数，直接在Sql中取出对象的属性即可 【parameterType="Object"】
+
+只有一个基本类型参数的情况下，可以直接在Sql中取到 
+
+多个参数用Map，或者
+
+## 配置解析
+
+### 核心配置文件
+
+- mybatis-config.xml 系统核心配置文件
+
+- MyBatis 的配置文件包含了会深深影响 MyBatis 行为的设置和属性信息。
+
+- 能配置的内容如下：
+
+  ```xml
+  configuration（配置）
+  properties（属性）
+  settings（设置）
+  typeAliases（类型别名）
+  typeHandlers（类型处理器）
+  objectFactory（对象工厂）
+  plugins（插件）
+  environments（环境配置）
+  environment（环境变量）
+  transactionManager（事务管理器）
+  dataSource（数据源）
+  databaseIdProvider（数据库厂商标识）
+  mappers（映射器）
+  ```
+
+### 环境配置
+
+- 配置MyBatis的多套运行环境，将SQL映射到多个不同的数据库上，必须指定其中一个为默认运行环境（通过default指定）
